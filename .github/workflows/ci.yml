@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lean-build:
+    name: Lean build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install elan
+        run: |
+          curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> $GITHUB_PATH
+
+      - name: Cache Mathlib
+        uses: actions/cache@v4
+        with:
+          path: .lake
+          key: lake-${{ hashFiles('lean-toolchain', 'lake-manifest.json') }}
+          restore-keys: lake-
+
+      - name: Get Mathlib cache
+        run: lake exe cache get || true
+
+      - name: Build
+        run: lake build
+
+      - name: No sorry or admit
+        run: |
+          if grep -rn '\bsorry\b\|\badmit\b' --include='*.lean' .; then
+            echo "::error::sorry or admit found in Lean files"
+            exit 1
+          fi
+
+      - name: Theorem count
+        run: |
+          count=$(grep -c '^theorem ' Score/DeterministicScore.lean)
+          echo "Theorems: $count"
+          if [ "$count" -lt 51 ]; then
+            echo "::error::Expected at least 51 theorems, found $count"
+            exit 1
+          fi
+
+  paper-validate:
+    name: Paper validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check claims
+        run: python3 papers/2026-deterministic-score/validation/check_claims.py papers/2026-deterministic-score/claims.yaml
+
+      - name: Check forbidden claims
+        run: python3 papers/2026-deterministic-score/validation/check_no_forbidden_claims.py papers/2026-deterministic-score/main.tex
+
+      - name: Scope audit
+        run: bash papers/2026-deterministic-score/validation/check_scope.sh papers/2026-deterministic-score/main.tex
+
+  markdown-lint:
+    name: Markdown lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: DavidAnson/markdownlint-cli2-action@v19
+        with:
+          config: .markdownlint.yaml
+          globs: "**/*.md"
