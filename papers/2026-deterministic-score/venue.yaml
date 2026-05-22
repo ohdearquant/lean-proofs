@@ -1,0 +1,25 @@
+venue:
+  name: ITP
+  year: 2026
+  official_url: https://itp-conference-2026.github.io/cfp.html
+  source_checked_date: 2026-05-22
+  conference_dates: 2026-07-26/2026-07-29
+  location: Lisbon, Portugal
+  format: LIPIcs
+  latex_class: lipics-v2021
+  latex_version: v2021.1.3
+  paper_type: regular
+  page_limit:
+    pages: 16
+    excludes:
+      - bibliographic references
+    appendix_allowed: false
+  review_model: lightweight_double_blind
+  anonymity_requirements:
+    - omit author names and institutions using anonymous option
+    - cite own related work in third person
+    - do not omit important background references
+  supplementary_material:
+    expected: true
+    anonymized: true
+    description: verifiable evidence of suitable implementation, such as formalization source files

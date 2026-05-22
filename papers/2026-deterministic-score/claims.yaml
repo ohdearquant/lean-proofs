@@ -1,0 +1,146 @@
+claims:
+  - id: C-FORMAL-001
+    status: active
+    claim_type: formal
+    paper_text: Score comparison is total.
+    paper_location: Section 4; Table 1
+    lean_witnesses:
+      - le_refl
+      - le_antisymm
+      - le_trans
+      - le_total
+      - trichotomy
+    evidence: Lean kernel check via lake build
+    limitations:
+      - Does not establish deterministic ordering among records with equal scores.
+    falsifiers:
+      - Any listed theorem is absent or weaker than the paper statement.
+      - The paper claims deterministic record ranking.
+
+  - id: C-FORMAL-002
+    status: active
+    claim_type: formal
+    paper_text: Score ordering is exactly raw integer ordering.
+    paper_location: Section 3.1; Table 1
+    lean_witnesses:
+      - le_iff_raw
+      - lt_iff_raw
+    evidence: Definitional equality and Lean theorem statements
+    limitations:
+      - Says nothing about upstream floating-point computations.
+
+  - id: C-FORMAL-003
+    status: active
+    claim_type: formal
+    paper_text: There are no unordered pairs of DeterministicScore values.
+    paper_location: Section 4; Table 1
+    lean_witnesses:
+      - no_unordered_pair
+    evidence: Lean theorem backed by total raw integer order
+    limitations:
+      - Does not prove IEEE-754 conversion correctness.
+
+  - id: C-FORMAL-004
+    status: active
+    claim_type: formal
+    paper_text: Constants MIN, MAX, ZERO, and NEG_INF are valid i64-bounded values and satisfy MIN < NEG_INF < ZERO < MAX.
+    paper_location: Section 3.3; Table 1
+    lean_witnesses:
+      - valid_MIN
+      - valid_MAX
+      - valid_ZERO
+      - valid_NEG_INF
+      - special_value_ordering
+    evidence: Lean theorem proofs by integer arithmetic
+    limitations:
+      - MIN is a reserved sentinel, not a NaN representation.
+
+  - id: C-FORMAL-005
+    status: active
+    claim_type: formal
+    paper_text: Runtime operations preserve the runtime-reachable invariant excluding MIN.
+    paper_location: Sections 3.2 and 5; Table 1
+    lean_witnesses:
+      - runtime_valid_valid
+      - add_saturating_runtime_valid
+      - from_float_runtime_valid
+      - mul_i64_runtime_valid
+      - div_i64_runtime_valid
+      - add_saturating_ne_min
+      - from_float_ne_min
+      - mul_i64_ne_min
+      - div_i64_ne_min
+    evidence: Lean theorem proofs
+    limitations:
+      - RuntimeValid is a model invariant, not automatically a Rust semantic proof.
+
+  - id: C-FORMAL-006
+    status: active
+    claim_type: formal
+    paper_text: Saturating addition is bounded and has exact branch specifications.
+    paper_location: Section 5.1; Table 1
+    lean_witnesses:
+      - add_saturating_bounded
+      - add_saturating_eq_max_of_overflow
+      - add_saturating_eq_neg_inf_of_underflow
+      - add_saturating_eq_sum_of_in_bounds
+      - add_saturating_comm
+    evidence: Lean theorem proofs
+    limitations:
+      - Associativity is intentionally not claimed.
+
+  - id: C-FORMAL-007
+    status: active
+    claim_type: formal
+    paper_text: Abstract float conversion maps NaN to ZERO, maps infinities to bounded constants, preserves validity, avoids MIN, and is monotone for in-range finite rounded integers.
+    paper_location: Section 6; Table 1
+    lean_witnesses:
+      - from_float_nan
+      - from_float_pos_inf
+      - from_float_neg_inf
+      - from_float_valid
+      - from_float_runtime_valid
+      - from_float_ne_min
+      - from_float_mono
+    evidence: Lean theorem proofs over FloatClass abstraction
+    limitations:
+      - FloatClass abstracts away IEEE-754 details and does not verify Rust from_f64.
+
+  - id: C-FORMAL-008
+    status: active
+    claim_type: formal
+    paper_text: Scalar multiplication and division preserve validity under the mathematical model, and division by zero has a deterministic sign-based policy.
+    paper_location: Section 5.2; Table 1
+    lean_witnesses:
+      - mul_i64_valid
+      - div_i64_valid
+      - div_zero_of_zero
+      - div_zero_of_pos
+      - div_zero_of_neg
+    evidence: Lean theorem proofs
+    limitations:
+      - Rust correspondence assumes widened arithmetic before clamping.
+
+  - id: C-IMPL-001
+    status: active
+    claim_type: implementation
+    paper_text: Rust implementation follows the model at the comparison and branch-structure level and is supported by tests.
+    paper_location: Sections 7 and 8; Table 1
+    rust_witnesses:
+      - ruvector-core/src/deterministic_score.rs
+      - impl Ord for DeterministicScore
+      - from_arithmetic_raw
+      - from_f64
+      - impl Mul<i64>
+      - impl Div<i64>
+    evidence: Engineering correspondence plus cargo test output
+    limitations:
+      - Not a mechanized Rust verification claim.
+      - Exact commit hash and CI logs must be added before submission.
+
+  - id: C-NONCLAIM-001
+    status: active
+    claim_type: limitation
+    paper_text: The paper does not claim verified Rust, deterministic record ranking, IEEE-754 conversion correctness, SOTA retrieval performance, or mechanized Rust overflow safety.
+    paper_location: Sections 2 and 10
+    evidence: Explicit non-claim text

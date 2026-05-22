@@ -1,0 +1,73 @@
+correspondence:
+  - paper_claim: Total order
+    lean_theorems: [le_refl, le_antisymm, le_trans, le_total, trichotomy]
+    rust_code: impl Ord for DeterministicScore
+    evidence_level: manual_spec_mapping_plus_tests
+  - paper_claim: Order equals raw comparison
+    lean_theorems: [le_iff_raw, lt_iff_raw]
+    rust_code: "fn cmp(&self, other) { self.0.cmp(&other.0) }"
+    evidence_level: manual_spec_mapping_plus_tests
+  - paper_claim: No unordered pairs
+    lean_theorems: [no_unordered_pair]
+    rust_code: integer Ord; no floating partial ordering
+    evidence_level: lean_proof_for_model
+  - paper_claim: Constants valid
+    lean_theorems: [valid_MIN, valid_MAX, valid_ZERO, valid_NEG_INF]
+    rust_code: constant i64 definitions
+    evidence_level: manual_spec_mapping_plus_tests
+  - paper_claim: MIN < NEG_INF < ZERO < MAX
+    lean_theorems: [special_value_ordering]
+    rust_code: constant definitions
+    evidence_level: manual_spec_mapping_plus_tests
+  - paper_claim: Runtime operations avoid MIN
+    lean_theorems: [add_saturating_runtime_valid, from_float_runtime_valid, mul_i64_runtime_valid, div_i64_runtime_valid, from_float_ne_min]
+    rust_code: from_arithmetic_raw clamps to [NEG_INF, MAX]
+    evidence_level: manual_spec_mapping_plus_tests
+  - paper_claim: RuntimeValid subset of Valid
+    lean_theorems: [runtime_valid_valid]
+    rust_code: structural relation between reachable interval and i64 bounds
+    evidence_level: lean_proof_for_model
+  - paper_claim: Saturating add bounded
+    lean_theorems: [add_saturating_bounded]
+    rust_code: impl Add via from_arithmetic_raw
+    evidence_level: manual_spec_mapping_plus_tests
+  - paper_claim: Saturating add branch specs
+    lean_theorems: [add_saturating_eq_max_of_overflow, add_saturating_eq_neg_inf_of_underflow, add_saturating_eq_sum_of_in_bounds]
+    rust_code: if/else in from_arithmetic_raw
+    evidence_level: manual_spec_mapping_plus_tests
+  - paper_claim: Saturating add commutative
+    lean_theorems: [add_saturating_comm]
+    rust_code: widened integer addition before clamp
+    evidence_level: manual_spec_mapping_plus_tests
+  - paper_claim: Float conversion valid
+    lean_theorems: [from_float_valid, from_float_runtime_valid]
+    rust_code: from_f64 plus from_rounded_arithmetic
+    evidence_level: abstract_model_plus_tests
+  - paper_claim: NaN maps to ZERO
+    lean_theorems: [from_float_nan]
+    rust_code: "if val.is_nan() { return Self::ZERO }"
+    evidence_level: abstract_model_plus_tests
+  - paper_claim: Float conversion avoids MIN
+    lean_theorems: [from_float_ne_min]
+    rust_code: underflow maps to NEG_INF, not MIN
+    evidence_level: abstract_model_plus_tests
+  - paper_claim: Order preservation in abstract model
+    lean_theorems: [from_float_mono]
+    rust_code: f32 to i64 order preservation requires external rounding/gap argument
+    evidence_level: lean_proof_for_abstract_model_only
+  - paper_claim: Mul/Div valid
+    lean_theorems: [mul_i64_valid, div_i64_valid]
+    rust_code: impl Mul<i64>, impl Div<i64>
+    evidence_level: abstract_model_plus_tests
+  - paper_claim: Div-by-zero policy
+    lean_theorems: [div_zero_of_zero, div_zero_of_pos, div_zero_of_neg]
+    rust_code: if/else in impl Div<i64>
+    evidence_level: manual_spec_mapping_plus_tests
+  - paper_claim: Scale positive
+    lean_theorems: [scale_pos, scale_ne_zero]
+    rust_code: "const SCALE: f64 = 4_294_967_296.0"
+    evidence_level: manual_spec_mapping_plus_tests
+  - paper_claim: Unbounded add algebra
+    lean_theorems: [add_comm, add_assoc, add_zero, sub_self]
+    rust_code: not directly used; runtime uses saturating arithmetic
+    evidence_level: lean_proof_for_model
