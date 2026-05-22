@@ -1,2 +1,3 @@
 # lean-proofs
-formal proofs in lean4
+
+Formal proofs in Lean 4.

@@ -904,29 +904,29 @@ PDF=main.pdf
 all: pdf
 
 pdf:
-	latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex
+  latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex
 
 clean:
-	latexmk -C
-	rm -f *.bbl *.run.xml
+  latexmk -C
+  rm -f *.bbl *.run.xml
 
 audit:
-	../../scripts/check_claim_map.py claims.yaml
-	../../scripts/check_references.py references.bib
-	../../scripts/check_venue.py paper.yaml
-	$(MAKE) pdf
+  ../../scripts/check_claim_map.py claims.yaml
+  ../../scripts/check_references.py references.bib
+  ../../scripts/check_venue.py paper.yaml
+  $(MAKE) pdf
 ```
 
 Repository root SHOULD include:
 
 ```makefile
 paper-audit:
-	lake build
-	./scripts/check_no_sorry.sh
-	./scripts/check_no_forbidden_axioms.sh
-	./scripts/extract_lean_decls.py
-	$(MAKE) -C papers/<paper-slug> audit
-	./papers/<paper-slug>/artifact/reproduce.sh
+  lake build
+  ./scripts/check_no_sorry.sh
+  ./scripts/check_no_forbidden_axioms.sh
+  ./scripts/extract_lean_decls.py
+  $(MAKE) -C papers/<paper-slug> audit
+  ./papers/<paper-slug>/artifact/reproduce.sh
 ```
 
 ---
