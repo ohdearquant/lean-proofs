@@ -1,0 +1,37 @@
+paper:
+  slug: deterministic-score-itp2026
+  title: Deterministic Score Comparison by Lean-Checked Fixed-Point Integers
+  target_venue: ITP
+  target_year: 2026
+  format: LIPIcs
+  anonymous_submission: true
+  contribution_kind:
+    - mechanized_formalization
+    - proof_engineering
+    - implementation_correspondence
+    - retrieval_system_boundary
+  artifact:
+    lean_repository_camera_ready: github.com/ohdearquant/lean-proofs
+    lean_file: Score/DeterministicScore.lean
+    rust_repository_camera_ready: github.com/ohdearquant/RuVector
+    rust_branch: feat/deterministic-scoring
+    rust_file: ruvector-core/src/deterministic_score.rs
+    lean_version: 4.25.2
+    mathlib_version: v4.25.2
+    theorem_count: 51
+    sorry_count: 0
+    deterministic_score_tests: 19
+    rust_suite_tests: 238
+  core_claim_boundary:
+    may_claim:
+      - deterministic score comparison via total-ordered fixed-point integers
+      - RuntimeValid preservation by runtime operations
+      - abstract float conversion model with validity and MIN-unreachability
+      - saturating arithmetic with exact branch specifications
+      - tested Rust implementation correspondence
+    must_not_claim:
+      - verified Rust implementation
+      - deterministic record ranking
+      - IEEE-754 conversion correctness
+      - SOTA retrieval performance
+      - mechanized Rust overflow safety

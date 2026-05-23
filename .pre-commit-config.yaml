@@ -1,0 +1,36 @@
+repos:
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.44.0
+    hooks:
+      - id: markdownlint
+        args: ["--config", ".markdownlint.yaml"]
+
+  - repo: local
+    hooks:
+      - id: lean-no-sorry
+        name: Lean sorry/admit check
+        entry: bash -c 'if grep -rn "\bsorry\b\|\badmit\b" --include="*.lean" --exclude-dir=.lake .; then echo "ERROR: sorry or admit found in Lean files"; exit 1; fi'
+        language: system
+        files: '\.lean$'
+        pass_filenames: false
+
+      - id: lean-build
+        name: Lean build
+        entry: bash -c 'cd /Users/lion/projects/lean-proofs && lake build 2>&1 | tail -5; exit ${PIPESTATUS[0]}'
+        language: system
+        files: '\.lean$'
+        pass_filenames: false
+
+      - id: latex-scope-check
+        name: LaTeX scope audit
+        entry: bash -c 'for f in $(git diff --cached --name-only --diff-filter=ACM | grep "\.tex$"); do bash validation/check_scope.sh "$f" || exit 1; done'
+        language: system
+        files: '\.tex$'
+        pass_filenames: false
+
+      - id: latex-trailing-whitespace
+        name: LaTeX trailing whitespace
+        entry: bash -c 'fail=0; for f in $(git diff --cached --name-only --diff-filter=ACM | grep "\.tex$"); do if grep -nP "\s+$" "$f"; then echo "Trailing whitespace in $f"; fail=1; fi; done; exit $fail'
+        language: system
+        files: '\.tex$'
+        pass_filenames: false

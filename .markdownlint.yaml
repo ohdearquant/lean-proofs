@@ -1,0 +1,6 @@
+default: true
+MD013: false          # line length — not enforcing for prose
+MD033: false          # inline HTML — needed for some tables
+MD041: false          # first line heading — not all .md files are docs
+MD024:
+  siblings_only: true # allow duplicate headings in different sections

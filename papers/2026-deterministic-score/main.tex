@@ -1,0 +1,341 @@
+\documentclass[a4paper,UKenglish,cleveref,autoref,thm-restate,anonymous]{lipics-v2021}
+
+\bibliographystyle{plainurl}
+
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{xspace}
+\usepackage{listings}
+
+\lstdefinelanguage{Lean}{
+  morekeywords={theorem,def,structure,inductive,where,namespace,end,instance,by,if,then,else,let,match,with,Prop,Int},
+  sensitive=true,
+  morecomment=[l]{--},
+  morecomment=[s]{/-}{-/}
+}
+\lstdefinelanguage{Rust}{
+  morekeywords={fn,impl,struct,enum,let,mut,if,else,return,const,pub,Self,match,where,for,in},
+  sensitive=true,
+  morecomment=[l]{//},
+  morecomment=[s]{/*}{*/}
+}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  columns=fullflexible,
+  keepspaces=true,
+  breaklines=true,
+  frame=single,
+  showstringspaces=false,
+  tabsize=2
+}
+
+\newcommand{\leanname}[1]{\texttt{\detokenize{#1}}}
+\newcommand{\rustname}[1]{\texttt{\detokenize{#1}}}
+\newcommand{\ds}{\textsc{DeterministicScore}\xspace}
+\newcommand{\runtimevalid}{\texttt{RuntimeValid}\xspace}
+\newcommand{\valid}{\texttt{Valid}\xspace}
+
+\title{Deterministic Score Comparison by Lean-Checked Fixed-Point Integers}
+\titlerunning{Deterministic Score Comparison}
+
+\author{Anonymous Author(s)}{Anonymous Institution}{anonymous@example.com}{}{}
+\authorrunning{Anonymous Author(s)}
+\Copyright{Anonymous Author(s)}
+
+\ccsdesc[100]{Software and its engineering~Formal software verification}
+\ccsdesc[100]{Theory of computation~Logic and verification}
+\ccsdesc[100]{Software and its engineering~Software libraries and repositories}
+\keywords{Lean 4, deterministic scoring, fixed-point arithmetic, total orders, retrieval systems}
+\category{}
+\relatedversion{}
+\supplement{Anonymous supplementary artifact submitted with the paper.}
+\funding{}
+\acknowledgements{}
+
+% Editor-only macros required by the template; values are placeholders for submission.
+\EventEditors{TBD}
+\EventNoEds{1}
+\EventLongTitle{17th International Conference on Interactive Theorem Proving (ITP 2026)}
+\EventShortTitle{ITP 2026}
+\EventAcronym{ITP}
+\EventYear{2026}
+\EventDate{July 26--29, 2026}
+\EventLocation{Lisbon, Portugal}
+\EventLogo{}
+\SeriesVolume{0}
+\ArticleNo{1}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Retrieval systems often compute scores with floating-point kernels, but floating-point values are awkward boundaries for reproducible ordering: NaNs are unordered, infinities require policy choices, and implementation details can vary across platforms.  This paper presents \ds, a Lean-checked fixed-point integer abstraction for deterministic score comparison.  Scores are represented by integers scaled by $2^{32}$ and ordered by raw integer comparison.  The Lean 4 artifact proves totality, trichotomy, raw-order characterization, validity of distinguished constants, bounded and branch-specified saturating arithmetic, and preservation of a runtime-reachable invariant that excludes a reserved sentinel.  We also model float classification abstractly, proving validity and unreachability of the sentinel under the model.  A Rust implementation integrates the abstraction at the retrieval boundary while leaving SIMD distance kernels in floating point.  We state Rust correspondence as engineering evidence, not mechanized verification.
+\end{abstract}
+
+\section{Introduction}
+\label{sec:introduction}
+
+Retrieval systems compare scores in order to decide which records should be returned, fused, or re-ranked.  In many vector-search pipelines these scores originate in floating-point kernels: dense distances, sparse similarities, HNSW beam-search priorities, quantization residuals, or reciprocal-rank-fusion weights.  Floating-point arithmetic is attractive for throughput and SIMD support, but it is a poor final representation for a deterministic comparison boundary.  IEEE floating-point includes NaN values whose ordering behavior is intentionally exceptional, and common explanations of floating-point arithmetic emphasize that rounding and special values are part of the model rather than implementation accidents~\cite{goldberg1991floating,ieee7542019}.  For retrieval applications this means that a system designer must choose where reproducibility matters: throughout all numeric kernels, or at the boundary where scores become comparable keys.
+
+This paper takes the second approach.  We keep floating-point kernels where they are useful, and introduce \ds at the comparison boundary.  The abstraction represents a score as a fixed-point integer, scaled by $2^{32}$, and defines comparison by the underlying integer order.  The formal result is deliberately narrow: we prove deterministic score comparison, not deterministic record ranking.  If two records have equal scores, record-level ranking still requires an external deterministic tie-breaker.  The Rust implementation used by the motivating system uses an ascending identifier tie-breaker, but that tie-breaker is not part of the Lean artifact and is not claimed as a mechanized result.
+
+The artifact consists of two layers.  The Lean 4 development, \leanname{Score/DeterministicScore.lean}, contains 51 theorems and builds with Lean 4.25.2 and Mathlib v4.25.2.  The Rust implementation, \rustname{ruvector-core/src/deterministic_score.rs}, is used in a vector database library and is validated by the repository's test suite.  We report the Rust implementation as engineering evidence: the Lean artifact specifies and proves properties of an abstract model, while Rust correspondence is checked by implementation structure and tests rather than by a mechanized semantics of Rust.
+
+\paragraph*{Contributions.}
+The paper makes the following contributions.
+\begin{enumerate}
+  \item We define a Lean model of fixed-point deterministic scores with two explicit invariants: \valid for raw i64-boundedness and \runtimevalid for values reachable by runtime operations.
+  \item We prove that score comparison is total, trichotomous, and exactly raw integer comparison.
+  \item We prove that runtime operations avoid the reserved minimum sentinel and preserve \runtimevalid.
+  \item We specify saturating addition with exact branch theorems and prove commutativity, while explicitly not claiming associativity.
+  \item We model float conversion by an abstract \leanname{FloatClass} and prove validity, NaN-to-zero behavior, sentinel unreachability, and in-range monotonicity under stated hypotheses.
+  \item We describe the Rust boundary architecture connecting floating-point retrieval kernels to integer score comparison, and provide a claim-to-artifact correspondence table.
+\end{enumerate}
+
+\section{Scope and Non-Claims}
+\label{sec:scope}
+
+The central design constraint is that the paper should say exactly what the formal artifact proves.  We therefore distinguish three levels of evidence.
+
+First, Lean theorems establish mathematical properties of the \ds model.  These include total order properties, invariant preservation, and branch specifications for saturating arithmetic.  These claims are kernel-checked by Lean.
+
+Second, the Rust implementation follows the model at the API and branch-structure level.  It implements comparison by raw integer comparison, uses widened arithmetic before clamping, maps NaN inputs to zero, and clamps arithmetic results to the runtime range.  These are engineering correspondence claims supported by code structure and tests.  They are not mechanized Rust-verification claims.
+
+Third, retrieval-system behavior beyond score comparison remains outside the formal artifact.  The Rust system keeps HNSW beam search, distance functions, and quantization in \rustname{f32} and SIMD kernels; \ds enters at the boundary in \rustname{search_deterministic()}, where floating-point distances are converted into deterministic-score similarities.  The implementation also uses identifier-ascending tie-breaking for equal scores, but the tie-breaker is not formalized here.
+
+\paragraph*{Explicit non-claims.}
+This paper does not provide a mechanized proof of the Rust implementation, record-level ranking determinism, full IEEE floating-point conversion semantics, retrieval-performance leadership, or Rust overflow safety. The Rust implementation is assumed to compute arithmetic in a widened representation before clamping. The Lean model uses unbounded integers and proves properties of the resulting abstract functions.
+
+\section{Formal Model}
+\label{sec:model}
+
+\subsection{Scores and raw ordering}
+
+A \ds value is a wrapper around an integer raw field.  The use of Lean's unbounded \leanname{Int} is intentional: it separates mathematical reasoning from bounded-machine representation.  The i64 limits are represented by named constants. Displayed Lean blocks are statement excerpts from the artifact; proof bodies are omitted from the paper unless the definition itself is the point.
+
+\begin{lstlisting}[language=Lean,caption={Core score type and i64 validity predicate.},label={lst:score-type}]
+def I64_MIN : Int := -9223372036854775808
+
+def I64_MAX : Int := 9223372036854775807
+
+structure DeterministicScore where
+  raw : Int
+
+def Valid (s : DeterministicScore) : Prop :=
+  I64_MIN <= s.raw /\ s.raw <= I64_MAX
+\end{lstlisting}
+
+Ordering is delegated to the raw integer order.
+
+\begin{lstlisting}[language=Lean,caption={Order definition and characterization.},label={lst:raw-order}]
+instance : LE DeterministicScore where
+  le a b := a.raw <= b.raw
+
+instance : LT DeterministicScore where
+  lt a b := a.raw < b.raw
+
+theorem le_iff_raw (a b : DeterministicScore) :
+    a <= b <-> a.raw <= b.raw := Iff.rfl
+
+theorem lt_iff_raw (a b : DeterministicScore) :
+    a < b <-> a.raw < b.raw := Iff.rfl
+\end{lstlisting}
+
+The characterization theorems are small but important.  They make the paper's central claim falsifiable: any statement about score comparison must reduce to a statement about raw integer comparison.
+
+\subsection{Two invariants}
+
+The model uses two invariants rather than one.  \valid states that the raw value fits in the full i64 range.  This range includes \leanname{MIN}, the raw value \leanname{I64_MIN}.  \runtimevalid states that the raw value is in the runtime-reachable range from \leanname{NEG_INF} to \leanname{MAX}.  The runtime range excludes \leanname{MIN}, which is reserved as a sentinel and is never produced by runtime operations.
+
+\paragraph*{Validity and runtime validity.}
+Let \leanname{MIN} be \leanname{I64_MIN}, \leanname{NEG_INF} be \leanname{I64_MIN + 1}, and \leanname{MAX} be \leanname{I64_MAX}.  A score is \valid if its raw value lies in $[\leanname{I64_MIN},\leanname{I64_MAX}]$.  A score is \runtimevalid if its raw value lies in $[\leanname{NEG_INF},\leanname{MAX}]$.
+
+The subset theorem \leanname{runtime_valid_valid} establishes that \runtimevalid implies \valid.  The converse is false because \valid includes the reserved sentinel.
+
+\subsection{Distinguished constants}
+
+The model defines zero, minimum, maximum, and negative infinity constants.  The order among them is fixed:
+\[
+\leanname{MIN} < \leanname{NEG_INF} < \leanname{ZERO} < \leanname{MAX}.
+\]
+The important semantic point is that \leanname{MIN} is not a NaN representation.  It is a reserved sentinel.  The abstract float-conversion model maps NaN to \leanname{ZERO}, not to \leanname{MIN}.  Runtime operations clamp underflow to \leanname{NEG_INF}, not \leanname{MIN}.  Thus \leanname{MIN} remains valid as an i64 value but unreachable under the modeled runtime API.
+
+\section{Verified Order Properties}
+\label{sec:order}
+
+The main order theorem is not surprising: integer order is total, and the score order is defined by integer order.  Its importance lies in replacing a partial or exceptional comparison boundary by a total one.
+
+\begin{theorem}[Total score comparison]
+For any two scores \leanname{a} and \leanname{b}, either \leanname{a <= b} or \leanname{b <= a}.
+\end{theorem}
+
+\begin{lstlisting}[language=Lean,caption={Totality and trichotomy witnesses.},label={lst:totality}]
+theorem le_total (a b : DeterministicScore) :
+    a <= b \/ b <= a
+
+theorem trichotomy (a b : DeterministicScore) :
+    (a < b /\ Not (a = b) /\ Not (b < a)) \/
+    (a = b /\ Not (a < b) /\ Not (b < a)) \/
+    (b < a /\ Not (a = b) /\ Not (a < b))
+\end{lstlisting}
+
+The artifact also proves reflexivity, antisymmetry, and transitivity.  Together with totality and trichotomy, these theorems establish deterministic score comparison: every pair of score values has a well-defined comparison relation.
+
+\paragraph*{Comparison is not ranking.}
+A total order on scores does not determine an order among records with equal scores.  If record-level determinism is required, the system must use an additional tie-breaker.  The Rust implementation uses an ascending identifier tie-breaker, but this paper does not formalize that policy.
+
+The theorem \leanname{no_unordered_pair} packages the contrast with floating-point comparison: every pair of \ds values is comparable.  This is the formal replacement for informal claims such as ``no NaN anomaly.''  The model does not prove facts about IEEE NaN payloads or hardware floating-point behavior; it proves that the integer score type has no unordered pair under its comparison relation.
+
+\section{Runtime Operations}
+\label{sec:runtime}
+
+\subsection{Saturating addition}
+
+Raw mathematical addition over Lean integers is useful for algebraic reasoning, but it does not by itself preserve i64 boundedness.  The runtime operation is therefore saturating addition.  It computes the mathematical sum and clamps to the runtime range $[\leanname{NEG_INF},\leanname{MAX}]$.
+
+\begin{lstlisting}[language=Lean,caption={Saturating addition over the runtime range.},label={lst:sat-add}]
+def add_saturating (a b : DeterministicScore) : DeterministicScore :=
+  let sum := a.raw + b.raw
+  if sum > MAX.raw then MAX
+  else if sum < NEG_INF.raw then NEG_INF
+  else { raw := sum }
+\end{lstlisting}
+
+The artifact proves both boundedness and exact branch behavior.  The branch theorems are the stronger specification: overflow returns \leanname{MAX}, underflow returns \leanname{NEG_INF}, and in-range sums return the exact mathematical sum.
+
+\begin{lstlisting}[language=Lean,caption={Branch specification for saturating addition.},label={lst:sat-add-branches}]
+theorem add_saturating_bounded (a b : DeterministicScore) :
+    NEG_INF <= add_saturating a b /\ add_saturating a b <= MAX
+
+theorem add_saturating_eq_max_of_overflow
+    (a b : DeterministicScore)
+    (h : MAX.raw < a.raw + b.raw) :
+    add_saturating a b = MAX
+
+theorem add_saturating_eq_neg_inf_of_underflow
+    (a b : DeterministicScore)
+    (hmax : Not (MAX.raw < a.raw + b.raw))
+    (hmin : a.raw + b.raw < NEG_INF.raw) :
+    add_saturating a b = NEG_INF
+
+theorem add_saturating_eq_sum_of_in_bounds
+    (a b : DeterministicScore)
+    (hmin : NEG_INF.raw <= a.raw + b.raw)
+    (hmax : a.raw + b.raw <= MAX.raw) :
+    add_saturating a b = { raw := a.raw + b.raw }
+\end{lstlisting}
+
+Saturating addition is commutative because the underlying mathematical sum is commutative and both clamp predicates depend only on the sum.  We intentionally do not claim associativity.  Saturating arithmetic is generally not associative, since an intermediate clamp can lose information that would otherwise be cancelled by a later operation.
+
+\subsection{Multiplication and division by integer scalars}
+
+The model also includes scalar multiplication and division.  Both functions operate over unbounded Lean integers and then clamp into the runtime range.  The Lean theorems prove that their results are valid and runtime-reachable.  For Rust correspondence, the relevant engineering assumption is that the implementation computes in a widened representation before clamping.  In the implementation this is done with widened integer arithmetic; however, the paper does not mechanize Rust evaluation or overflow behavior.
+
+Division includes a deterministic zero-division policy: zero divided by zero maps to \leanname{ZERO}, positive divided by zero maps to \leanname{MAX}, and negative divided by zero maps to \leanname{NEG_INF}.  The policy is formalized by \leanname{div_zero_of_zero}, \leanname{div_zero_of_pos}, and \leanname{div_zero_of_neg}.
+
+\section{Abstract Float Conversion Model}
+\label{sec:float}
+
+The Lean artifact models float conversion by classifying an input as NaN, positive infinity, negative infinity, or a finite rounded integer.  This abstraction is deliberately not an IEEE-754 proof.  It does not reason about mantissas, hardware rounding modes, compiler flags, SIMD lanes, or platform-specific conversions.  Instead, it formalizes the boundary policy that the Rust implementation is intended to follow after a floating-point value has been classified and rounded.
+
+\begin{lstlisting}[language=Lean,caption={Abstract float-classification model.},label={lst:float-class}]
+inductive FloatClass where
+  | nan : FloatClass
+  | posInf : FloatClass
+  | negInf : FloatClass
+  | finite : Int -> FloatClass
+
+def from_float : FloatClass -> DeterministicScore
+  | .nan => ZERO
+  | .posInf => MAX
+  | .negInf => NEG_INF
+  | .finite n =>
+    if I64_MAX <= n then MAX
+    else if n <= I64_MIN then NEG_INF
+    else { raw := n }
+\end{lstlisting}
+
+The theorems establish the intended policy: NaN maps to zero, positive infinity maps to maximum, negative infinity maps to negative infinity, every output is \valid and \runtimevalid, and \leanname{MIN} is never produced.  For finite values that are already in range, \leanname{from_float_mono} proves order preservation under explicit hypotheses.  This is a theorem about the abstract rounded integers \leanname{m} and \leanname{n}; it is not a proof that arbitrary \rustname{f32} or \rustname{f64} conversions preserve order.
+
+\section{Rust Boundary Architecture}
+\label{sec:rust}
+
+The Rust implementation places \ds at the boundary between high-throughput floating-point retrieval kernels and deterministic comparison.  HNSW search remains a floating-point algorithm, as in standard approximate-nearest-neighbor systems~\cite{malkov2020hnsw}.  Dense and sparse distance functions, SIMD kernels, and quantization steps remain \rustname{f32}-based.  The deterministic path converts floating-point distances into fixed-point score similarities at \rustname{search_deterministic()}, after which comparison is performed by raw integer order.
+
+This architecture is less ambitious than verifying an entire retrieval pipeline, but it matches the practical failure mode: nondeterminism at the final comparison boundary can affect observable ordering even when upstream kernels are unchanged.  By isolating the integer comparison boundary, the system obtains a deterministic score key while retaining established floating-point kernels.
+
+The implementation also includes rank-fusion behavior.  Reciprocal rank fusion is a standard method for combining ranked lists~\cite{cormack2009rrf}.  The implementation uses $K=15$ rather than the common $K=60$ default.  This choice is based on a separate Lean proof about consensus bias, named \leanname{ret010_k60_consensus_bias}, but that proof is external to the artifact discussed here.  Consequently, this paper mentions the choice only as an engineering design note, not as a contribution.
+
+\section{Artifact Validation and Correspondence}
+\label{sec:artifact}
+
+The Lean artifact builds with Lean 4.25.2 and Mathlib v4.25.2, with zero \leanname{sorry}. The Rust implementation passes the repository test suite, including 19 deterministic-score-specific tests and 238 tests in the broader suite.  For submission, the supplementary artifact should provide the exact commit hashes, \leanname{lean-toolchain}, \leanname{lakefile.lean}, \leanname{lake-manifest.json}, Rust toolchain metadata, and a single validation entry point.
+
+\begin{lstlisting}[caption={Expected artifact validation commands.},label={lst:validation}]
+lake build
+grep -R "\bsorry\b\|\badmit\b" --include='*.lean' .
+cargo test --locked
+cargo fmt --check
+\end{lstlisting}
+
+\Cref{tab:correspondence} gives the required correspondence between paper claims, Lean declarations, and Rust implementation surfaces.  The evidence column should be read carefully: Lean theorems are mechanized evidence for the formal model; Rust code entries are engineering correspondence evidence unless explicitly stated otherwise.
+
+\begin{table}[t]
+\caption{Claim-to-artifact correspondence.  Rust entries are engineering evidence, not mechanized Rust verification.}
+\label{tab:correspondence}
+\footnotesize
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{0.24\textwidth}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X}
+\toprule
+Paper claim & Lean theorem(s) & Rust code / evidence \\
+\midrule
+Total order & \leanname{le_refl}, \leanname{le_antisymm}, \leanname{le_trans}, \leanname{le_total}, \leanname{trichotomy} & \rustname{impl Ord for DeterministicScore} \\
+Order equals raw comparison & \leanname{le_iff_raw}, \leanname{lt_iff_raw} & \rustname{cmp(&self, other) -> self.0.cmp(&other.0)} \\
+No unordered pairs & \leanname{no_unordered_pair} & Total comparison; no partial-order fallback required for scores \\
+Constants valid & \leanname{valid_MIN}, \leanname{valid_MAX}, \leanname{valid_ZERO}, \leanname{valid_NEG_INF} & Constant i64 definitions \\
+Special constant order & \leanname{special_value_ordering} & Constant definitions: \rustname{MIN < NEG_INF < ZERO < MAX} \\
+Runtime operations avoid \leanname{MIN} & \leanname{*_runtime_valid}, \leanname{*_ne_min} & \rustname{from_arithmetic_raw} clamps to \rustname{[NEG_INF, MAX]} \\
+\runtimevalid implies \valid & \leanname{runtime_valid_valid} & Structural invariant relation \\
+Saturating addition bounded & \leanname{add_saturating_bounded} & \rustname{impl Add} calls \rustname{from_arithmetic_raw(...)} \\
+Saturating addition branch specs & \leanname{add_saturating_eq_max_of_overflow}, \leanname{add_saturating_eq_neg_inf_of_underflow}, \leanname{add_saturating_eq_sum_of_in_bounds} & Corresponding if/else branch structure in \rustname{from_arithmetic_raw} \\
+Saturating addition commutative & \leanname{add_saturating_comm} & Widened integer addition is commutative before clamping \\
+Float conversion valid & \leanname{from_float_valid}, \leanname{from_float_runtime_valid} & \rustname{from_f64} and \rustname{from_rounded_arithmetic}; abstract model only \\
+NaN maps to zero & \leanname{from_float_nan} & \rustname{if val.is_nan() then Self::ZERO} \\
+Float conversion avoids \leanname{MIN} & \leanname{from_float_ne_min} & Underflow maps to \rustname{NEG_INF}, not \rustname{MIN} \\
+In-range order preservation & \leanname{from_float_mono} & Applies when rounded integer gap exceeds conversion error; not an IEEE proof \\
+Scalar multiplication/division valid & \leanname{mul_i64_valid}, \leanname{div_i64_valid} & \rustname{impl Mul<i64>}, \rustname{impl Div<i64>}; assumes widened arithmetic before clamping \\
+Division-by-zero policy & \leanname{div_zero_of_zero}, \leanname{div_zero_of_pos}, \leanname{div_zero_of_neg} & Branches in \rustname{impl Div<i64>} \\
+Scale positive & \leanname{scale_pos}, \leanname{scale_ne_zero} & \rustname{const SCALE: f64 = 4_294_967_296.0} \\
+Unbounded raw-add algebra & \leanname{add_comm}, \leanname{add_assoc}, \leanname{add_zero}, \leanname{sub_self} & Not used as Rust saturating-arithmetic laws \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Related Work}
+\label{sec:related}
+
+Lean 4 provides both a theorem prover and a programming language, making it suitable for compact formal models of executable abstractions~\cite{demoura2021lean4}.  The development relies on Mathlib's integer and order infrastructure, part of the broader Lean mathematical library~\cite{mathlib2020}.  Our contribution is not a new order theory; rather, it is a proof-engineered boundary abstraction for retrieval systems whose production implementation uses integer keys.
+
+Floating-point arithmetic has a long literature explaining the gap between mathematical real numbers and implemented floating-point operations~\cite{goldberg1991floating,ieee7542019}.  The present work avoids proving floating-point semantics.  Instead, it models a classification-and-rounding boundary and proves properties after conversion to integers.  This choice is a limitation but also a practical design principle: the deterministic comparison boundary is small enough to verify directly.
+
+Approximate nearest-neighbor search and rank fusion provide the retrieval context.  HNSW is a widely used graph-based method for approximate nearest-neighbor search~\cite{malkov2020hnsw}, and reciprocal rank fusion combines rankings without requiring calibrated scores~\cite{cormack2009rrf}.  This paper does not claim improved retrieval quality or retrieval-performance leadership.  It addresses a different question: after such systems produce scores, how can comparison be made deterministic and formally specified?
+
+\section{Limitations}
+\label{sec:limitations}
+
+The most important limitation is that \ds proves score comparison, not record ranking.  Equal scores require an external tie-breaker.  The Rust implementation uses identifier-ascending order, but this policy is outside the Lean artifact.
+
+The second limitation is the abstraction boundary for floating point.  \leanname{FloatClass} does not formalize IEEE-754 conversion, hardware rounding, compiler behavior, SIMD behavior, or platform-specific library calls.  It models the policy after classification and rounding.
+
+The third limitation is Rust correspondence.  The Rust implementation uses widened arithmetic before clamping, but the paper does not provide a mechanized Rust semantics proof.  Therefore, the paper avoids any wording that would imply a mechanized proof of Rust semantics or Rust overflow safety.
+
+Finally, the paper does not evaluate retrieval quality or speed.  It does not claim retrieval-performance leadership.  The contribution is a verified comparison boundary and an implementation architecture that can be used by retrieval systems.
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+\ds provides a small, mechanically checked abstraction for deterministic score comparison.  By representing scores as fixed-point integers and ordering them by raw integer comparison, the Lean artifact proves total comparability, trichotomy, invariant preservation, runtime sentinel avoidance, and branch-specified saturating arithmetic.  The Rust implementation places this abstraction at the boundary of a retrieval pipeline while leaving floating-point kernels intact.  The result is not an end-to-end verified retrieval system, but a precise and reusable comparison boundary: exactly the part of the pipeline where deterministic score comparison is required.
+
+\bibliography{references}
+
+\end{document}

@@ -1,0 +1,45 @@
+correspondence:
+  - paper_claim: Total order
+    lean_theorems: [le_refl, le_antisymm, le_trans, le_total, trichotomy]
+    rust_code: impl Ord for DeterministicScore
+    evidence_level: formal_model_plus_engineering_correspondence
+
+  - paper_claim: Order equals raw comparison
+    lean_theorems: [le_iff_raw, lt_iff_raw]
+    rust_code: self.0.cmp(&other.0)
+    evidence_level: formal_model_plus_engineering_correspondence
+
+  - paper_claim: No unordered pairs
+    lean_theorems: [no_unordered_pair]
+    rust_code: total score comparison through Ord
+    evidence_level: formal_model
+
+  - paper_claim: Constants valid and ordered
+    lean_theorems: [valid_MIN, valid_MAX, valid_ZERO, valid_NEG_INF, special_value_ordering]
+    rust_code: constant definitions
+    evidence_level: formal_model_plus_engineering_correspondence
+
+  - paper_claim: Runtime operations avoid MIN
+    lean_theorems: [add_saturating_runtime_valid, from_float_runtime_valid, mul_i64_runtime_valid, div_i64_runtime_valid, add_saturating_ne_min, from_float_ne_min, mul_i64_ne_min, div_i64_ne_min]
+    rust_code: from_arithmetic_raw clamps to [NEG_INF, MAX]
+    evidence_level: formal_model_plus_engineering_correspondence
+
+  - paper_claim: RuntimeValid implies Valid
+    lean_theorems: [runtime_valid_valid]
+    rust_code: structural invariant
+    evidence_level: formal_model
+
+  - paper_claim: Saturating addition exact behavior
+    lean_theorems: [add_saturating_bounded, add_saturating_eq_max_of_overflow, add_saturating_eq_neg_inf_of_underflow, add_saturating_eq_sum_of_in_bounds, add_saturating_comm]
+    rust_code: impl Add calling from_arithmetic_raw
+    evidence_level: formal_model_plus_engineering_correspondence
+
+  - paper_claim: Float conversion policy
+    lean_theorems: [from_float_nan, from_float_pos_inf, from_float_neg_inf, from_float_valid, from_float_runtime_valid, from_float_ne_min, from_float_mono]
+    rust_code: from_f64 and from_rounded_arithmetic
+    evidence_level: abstract_model_plus_tests
+
+  - paper_claim: Scalar operations and division-by-zero policy
+    lean_theorems: [mul_i64_valid, div_i64_valid, div_zero_of_zero, div_zero_of_pos, div_zero_of_neg]
+    rust_code: impl Mul<i64>, impl Div<i64>
+    evidence_level: abstract_model_plus_tests
