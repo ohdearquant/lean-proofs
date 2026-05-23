@@ -33,7 +33,7 @@ jobs:
 
       - name: No sorry or admit
         run: |
-          if grep -rn '\bsorry\b\|\badmit\b' --include='*.lean' .; then
+          if grep -rn '\bsorry\b\|\badmit\b' --include='*.lean' --exclude-dir=.lake .; then
             echo "::error::sorry or admit found in Lean files"
             exit 1
           fi

@@ -9,7 +9,7 @@ repos:
     hooks:
       - id: lean-no-sorry
         name: Lean sorry/admit check
-        entry: bash -c 'if grep -rn "\bsorry\b\|\badmit\b" --include="*.lean" .; then echo "ERROR: sorry or admit found in Lean files"; exit 1; fi'
+        entry: bash -c 'if grep -rn "\bsorry\b\|\badmit\b" --include="*.lean" --exclude-dir=.lake .; then echo "ERROR: sorry or admit found in Lean files"; exit 1; fi'
         language: system
         files: '\.lean$'
         pass_filenames: false
